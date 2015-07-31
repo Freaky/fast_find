@@ -1,6 +1,9 @@
 require "bundler/gem_tasks"
+require 'rake/testtask'
 
-task :test do
-	$:.unshift './test'
-  Dir['./test/test_*.rb'].each { |file| require file }
+Rake::TestTask.new do |t|
+	t.libs.push  'test'
+	t.pattern = 'test/test_*.rb'
+	t.warning = true
+	t.verbose = true
 end
