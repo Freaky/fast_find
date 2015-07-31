@@ -5,7 +5,6 @@
 #
 # * Processes multiple directories concurrently.
 # * Can pass in a File::Stat or Exception object as the second argument to the block.
-# * Does not support #prune.
 # * Does not sort or otherwise provide any guarantees about order.
 
 require 'find'
@@ -77,9 +76,8 @@ module FastFind
 		def find(*paths, ignore_error: true, one_shot: false, &block)
 			block or return enum_for(__method__, paths)
 
-			results = Queue.new # SizedQueue.new(QUEUE_SIZE)
+			results = Queue.new
 			pending = Set.new
-			done = Set.new
 
 			paths.map!(&:dup).each do |path|
 				pending << path
