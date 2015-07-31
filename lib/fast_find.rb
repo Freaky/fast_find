@@ -74,7 +74,6 @@ module FastFind
 					end
 				end
 
-				# FIXME: clear the pool
 				raise stat if stat.is_a?(Exception) and !ignore_error
 
 				catch(:prune) do
@@ -87,6 +86,7 @@ module FastFind
 				end
 			end
 		ensure
+			@queue.clear
 			shutdown if one_shot
 		end
 
