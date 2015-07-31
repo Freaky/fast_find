@@ -5,7 +5,7 @@ require 'fast_find/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "fast_find"
-  spec.version       = Fastfind::VERSION
+  spec.version       = FastFind::VERSION
   spec.authors       = ["Thomas Hurst"]
   spec.email         = ["tom@hur.st"]
 
