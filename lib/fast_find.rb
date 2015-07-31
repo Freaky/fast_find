@@ -48,8 +48,8 @@ module FastFind
 			end
 		end
 
-		def find(*paths, ignore_error: true, one_shot: false, &block)
-			block or return enum_for(__method__, *paths)
+		def find(*paths, ignore_error: true, &block)
+			block or return enum_for(__method__, *paths, ignore_error: ignore_error)
 
 			results = Queue.new
 			pending = Set.new
