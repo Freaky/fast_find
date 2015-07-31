@@ -1,8 +1,10 @@
 #!/usr/bin/env ruby
 
 require 'find'
-require 'fast_find'
 require 'benchmark'
+
+require "bundler/setup"
+require 'fast_find'
 
 FastFinder = FastFind::Finder.new
 
