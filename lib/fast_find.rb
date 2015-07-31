@@ -2,7 +2,6 @@
 # fast_find.rb: A Find workalike optimized for performance.
 #
 
-require 'find'
 require 'set'
 require 'thread'
 
