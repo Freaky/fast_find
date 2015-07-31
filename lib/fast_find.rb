@@ -10,8 +10,8 @@ module FastFind
 
 	def self.find(*paths, concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
 	              &block)
-		Finder.new(concurrency: concurrency, one_shot: true).find(*paths,
-		  ignore_error: ignore_error, &block)
+		Finder.new(concurrency: concurrency, one_shot: true)
+			.find(*paths, ignore_error: ignore_error, &block)
 	end
 
 	def self.prune
@@ -42,7 +42,7 @@ module FastFind
 				results << [path, stat]
 			end
 
-			if stat.kind_of? File::Stat and stat.directory?
+			if stat.is_a?(File::Stat) and stat.directory?
 				Dir.new(path).each do |entry|
 					next if entry == '.' or entry == '..'
 
@@ -92,12 +92,12 @@ module FastFind
 				end
 
 				# FIXME: clear the pool
-				raise stat if stat.kind_of? Exception and !ignore_error
+				raise stat if stat.is_a?(Exception) and !ignore_error
 
 				catch(:prune) do
 					yield_entry(result, block)
 
-					if stat.kind_of? File::Stat and stat.directory? and !pending.include?(path)
+					if stat.is_a?(File::Stat) and stat.directory? and !pending.include?(path)
 						pending << path
 						@queue << [path, stat, results]
 					end
