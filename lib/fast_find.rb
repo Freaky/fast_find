@@ -8,6 +8,16 @@ require 'thread'
 module FastFind
 	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 8 : 1
 
+	def self.find(*paths, concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
+	              &block)
+		Finder.new(concurrency: concurrency, one_shot: true).find(*paths,
+		  ignore_error: ignore_error, &block)
+	end
+
+	def self.prune
+		throw :prune
+	end
+
 	class Walker
 		def spawn(queue)
 			Thread.new do
@@ -45,17 +55,6 @@ module FastFind
 		ensure
 			results << [path, :finished]
 		end
-	end
-
-	def self.find(*paths,
-	              concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
-	              &block)
-		Finder.new(concurrency: concurrency, one_shot: true).find(*paths,
-		  ignore_error: ignore_error, &block)
-	end
-
-	def self.prune
-		throw :prune
 	end
 
 	class Finder
