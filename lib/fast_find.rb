@@ -120,8 +120,6 @@ module FastFind
 		end
 
 		def walk(path, stat, results)
-			path = path
-
 			unless stat
 				stat = safe_stat(path)
 				results << [path, stat]
