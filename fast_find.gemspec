@@ -1,10 +1,10 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'fastfind/version'
+require 'fast_find/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "fastfind"
+  spec.name          = "fast_find"
   spec.version       = Fastfind::VERSION
   spec.authors       = ["Thomas Hurst"]
   spec.email         = ["tom@hur.st"]

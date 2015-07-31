@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'fastfind'
+require 'fast_find'
 
 # FastFind.find('.') do |path, stat|
 # 	puts "#{path}: #{stat.inspect}"
