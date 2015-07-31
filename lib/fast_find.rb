@@ -104,7 +104,7 @@ module FastFind
 				end
 			end
 		ensure
-			finish if one_shot
+			shutdown if one_shot
 		end
 
 		def yield_entry(entry, block)
@@ -115,7 +115,7 @@ module FastFind
 			end
 		end
 
-		def finish
+		def shutdown
 			walkers.each { @queue << nil }
 			walkers.each(&:join)
 			walkers.clear
