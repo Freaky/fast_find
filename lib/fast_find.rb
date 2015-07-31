@@ -6,6 +6,8 @@ require 'set'
 require 'thread'
 
 module FastFind
+	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 8 : 1
+
 	class Walker
 		def spawn(queue)
 			Thread.new do
@@ -43,8 +45,6 @@ module FastFind
 			results << [path, :finished]
 		end
 	end
-
-	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 8 : 1
 
 	def self.find(*paths,
 	              concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
