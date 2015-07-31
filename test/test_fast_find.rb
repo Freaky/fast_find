@@ -9,9 +9,11 @@ class TestFastfind < Minitest::Test
 
   def assert_raise_with_message(type, pattern, &block)
     block.call
-  rescue => e
+  rescue Exception => e
     assert_same(type, e.class)
     assert_match(pattern, e.message)
+  else
+    flunk "Didn't raise anything"
   end
 
 	Find = FastFind
@@ -115,27 +117,27 @@ class TestFastfind < Minitest::Test
         File.chmod(0300, dir)
         a = []
         Find.find(d) {|f| a << f }
-        # assert_equal([d, dir], a)
+        assert_equal([d, dir], a)
 
         a = []
         Find.find(d, ignore_error: true) {|f| a << f }
-        # assert_equal([d, dir], a)
+        assert_equal([d, dir], a)
 
         a = []
         Find.find(d, ignore_error: true).each {|f| a << f }
-        # assert_equal([d, dir], a)
+        assert_equal([d, dir], a)
 
         a = []
         assert_raise_with_message(Errno::EACCES, /#{Regexp.quote(dir)}/) do
           Find.find(d, ignore_error: false) {|f| a << f }
         end
-        # assert_equal([d, dir], a)
+        assert_equal([d, dir], a)
 
         a = []
         assert_raise_with_message(Errno::EACCES, /#{Regexp.quote(dir)}/) do
           Find.find(d, ignore_error: false).each {|f| a << f }
         end
-        # assert_equal([d, dir], a)
+        assert_equal([d, dir], a)
       ensure
         File.chmod(0700, dir)
       end
