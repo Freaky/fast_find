@@ -1,37 +1,26 @@
 #!/usr/bin/env ruby
 
+require 'find'
 require 'fast_find'
-
-# FastFind.find('.') do |path, stat|
-# 	puts "#{path}: #{stat.inspect}"
-# end
-
 require 'benchmark'
-
-#BMDir = '/home/freaky/code/freshbsd/v4-roda'
-BMDir = '/cvs/netbsd/othersrc'
 
 FastFinder = FastFind::Finder.new
 
-# FastFind.find('/tmp',  errors: :raise) do |f, s|
-# 	p [f, s] if f =~ /adir/
-# end
-# exit
+test_dirs = ARGV
+abort("Usage: #{$0} [dir1 [dir2[ ..]]]") if test_dirs.empty?
 
-5.times do
 Benchmark.bmbm do |b|
 	b.report("Find") do
 		files = Set.new
-		Find.find(BMDir) do |f|
-			files << f
+		Find.find(*test_dirs) do |f|
+			files << [f, File.lstat(f)]
 		end
 	end
 
 	b.report("FastFind") do
 		files =  Set.new
-		FastFinder.find(BMDir) do |f|
-			files << f
+		FastFinder.find(*test_dirs) do |f, stat|
+			files << [f, stat]
 		end
 	end
-end
 end
