@@ -18,6 +18,89 @@ module FastFind
 		throw :prune
 	end
 
+	class Finder
+		def initialize(concurrency: DEFAULT_CONCURRENCY, one_shot: false)
+			@mutex       = Mutex.new
+			@queue       = Queue.new
+			@one_shot    = one_shot
+			@concurrency = concurrency
+		end
+
+		def startup
+			@mutex.synchronize do
+				return if @walkers
+
+				@walkers = concurrency.times.map { Walker.new.spawn(@queue) }
+			end
+		end
+
+		def shutdown
+			@mutex.synchronize do
+				return unless @walkers
+
+				@queue.clear
+				walkers.each { @queue << nil }
+				walkers.each(&:join)
+
+				@walkers = nil
+			end
+		end
+
+		def find(*paths, ignore_error: true, one_shot: false, &block)
+			block or return enum_for(__method__, *paths)
+
+			results = Queue.new
+			pending = Set.new
+
+			startup
+
+			paths.map!(&:dup).each do |path|
+				pending << path
+				@queue << [path, nil, results]
+			end
+
+			while result = results.deq
+				path, stat = result
+
+				if stat == :finished
+					pending.delete(path)
+
+					if pending.empty?
+						break
+					else
+						next
+					end
+				end
+
+				# FIXME: clear the pool
+				raise stat if stat.is_a?(Exception) and !ignore_error
+
+				catch(:prune) do
+					yield_entry(result, block)
+
+					if stat.is_a?(File::Stat) and stat.directory? and !pending.include?(path)
+						pending << path
+						@queue << [path, stat, results]
+					end
+				end
+			end
+		ensure
+			shutdown if one_shot
+		end
+
+		private
+
+		def yield_entry(entry, block)
+			if block.arity == 2
+				block.call(entry[0].dup, entry[1])
+			else
+				block.call entry[0].dup
+			end
+		end
+
+		attr_reader :walkers, :one_shot, :concurrency
+	end
+
 	class Walker
 		def spawn(queue)
 			Thread.new do
@@ -55,73 +138,5 @@ module FastFind
 		ensure
 			results << [path, :finished]
 		end
-	end
-
-	class Finder
-		def initialize(concurrency: DEFAULT_CONCURRENCY, one_shot: false)
-			@one_shot = one_shot
-
-			@queue = Queue.new
-			@walkers = Array.new(concurrency).map! do
-				Walker.new.spawn(@queue)
-			end
-		end
-
-		def find(*paths, ignore_error: true, one_shot: false, &block)
-			block or return enum_for(__method__, *paths)
-
-			results = Queue.new
-			pending = Set.new
-
-			paths.map!(&:dup).each do |path|
-				pending << path
-				@queue << [path, nil, results]
-			end
-
-			while result = results.deq
-				path, stat = result
-
-				if stat == :finished
-					pending.delete(path)
-
-					if pending.empty?
-						break
-					else
-						next
-					end
-				end
-
-				# FIXME: clear the pool
-				raise stat if stat.is_a?(Exception) and !ignore_error
-
-				catch(:prune) do
-					yield_entry(result, block)
-
-					if stat.is_a?(File::Stat) and stat.directory? and !pending.include?(path)
-						pending << path
-						@queue << [path, stat, results]
-					end
-				end
-			end
-		ensure
-			shutdown if one_shot
-		end
-
-		def yield_entry(entry, block)
-			if block.arity == 2
-				block.call(entry[0].dup, entry[1])
-			else
-				block.call entry[0].dup
-			end
-		end
-
-		def shutdown
-			walkers.each { @queue << nil }
-			walkers.each(&:join)
-			walkers.clear
-		end
-
-		private
-		attr_reader :walkers, :one_shot
 	end
 end
