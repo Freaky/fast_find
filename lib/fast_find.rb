@@ -4,6 +4,7 @@
 
 require 'set'
 require 'thread'
+require 'fast_find/version'
 
 module FastFind
 	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 8 : 1
