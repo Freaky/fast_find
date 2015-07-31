@@ -42,6 +42,7 @@ module FastFind
 					results << [entry, stat]
 				end
 			end
+		ensure
 			results << [path, :finished]
 		end
 	end
