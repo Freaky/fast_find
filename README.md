@@ -41,8 +41,9 @@ a single shared FastFind object.  Multiple concurrent calls to
     Finder = FastFind::Finder.new
     Finder.find(dir) { .. }
 
-You can call `Finder#shutdown` to close the work pool.  For the time being this
-cannot be reversed - you need to make a new `FastFind::Finder`.
+You can call `Finder#shutdown` to close the work pool if you're done with the
+instance for the time being.  Ensure no other calls to its `#find` are in flight
+beforehand.  The pool is restarted the next time `#find` is called.
 
 Use the `concurrency` named argument to change the number of worker threads:
 
