@@ -25,6 +25,7 @@ module FastFind
 			@queue       = Queue.new
 			@one_shot    = one_shot
 			@concurrency = concurrency
+			@walkers     = nil
 		end
 
 		def startup
