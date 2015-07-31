@@ -1,11 +1,6 @@
 #
 # fast_find.rb: A Find workalike optimized for performance.
 #
-# Differences from Find:
-#
-# * Processes multiple directories concurrently.
-# * Can pass in a File::Stat or Exception object as the second argument to the block.
-# * Does not sort or otherwise provide any guarantees about order.
 
 require 'find'
 require 'set'
