@@ -1,4 +1,4 @@
 $LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
-require 'fastfind'
+require 'fast_find'
 
 require 'minitest/autorun'
