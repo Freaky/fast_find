@@ -137,6 +137,10 @@ module FastFind
 					results << [entry, stat]
 				end
 			end
+		rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
+		       Errno::ENAMETOOLONG => e
+			# Unreadable directory
+			# TODO: if ignore_error = false, we should raise this
 		ensure
 			results << [path, :finished]
 		end
