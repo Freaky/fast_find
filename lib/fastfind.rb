@@ -11,13 +11,16 @@
 require 'find'
 require 'set'
 require 'thread'
-require 'celluloid/current'
-
-# Celluloid.task_class = Celluloid::Task::Threaded
 
 module FastFind
 	class Walker
-		include Celluloid
+		def spawn(queue)
+			Thread.new do
+				while job = queue.deq
+					walk(*job)
+				end
+			end
+		end
 
 		def safe_stat(path)
 			File.lstat(path)
@@ -45,15 +48,10 @@ module FastFind
 				end
 			end
 			results << [path, :finished]
-		rescue => e
-			puts "Walker exception: #{e.class}, #{e.message}"
-			exit!
-			# results << [path, :finished]
 		end
 	end
 
-	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 16 : 1
-	QUEUE_SIZE = 1024
+	DEFAULT_CONCURRENCY = %w(jruby rbx).include?(RUBY_ENGINE) ? 8 : 1
 
 	def self.find(*paths,
 	              concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
@@ -69,7 +67,11 @@ module FastFind
 	class Finder
 		def initialize(concurrency: DEFAULT_CONCURRENCY, one_shot: false)
 			@one_shot = one_shot
-			@walkers = Walker.pool(size: concurrency)
+
+			@queue = Queue.new
+			@walkers = Array.new(concurrency).map! do
+				Walker.new.spawn(@queue)
+			end
 		end
 
 		def find(*paths, ignore_error: true, one_shot: false, &block)
@@ -81,7 +83,7 @@ module FastFind
 
 			paths.map!(&:dup).each do |path|
 				pending << path
-				walkers.async.walk(path, nil, results)
+				@queue << [path, nil, results]
 			end
 
 			while result = results.deq
@@ -104,9 +106,8 @@ module FastFind
 					yield_entry(result, block)
 
 					if stat.kind_of? File::Stat and stat.directory? and !pending.include?(path)
-						# puts "Pushing #{path}"
 						pending << path
-						walkers.async.walk(path, stat, results)
+						@queue << [path, stat, results]
 					end
 				end
 			end
@@ -123,7 +124,9 @@ module FastFind
 		end
 
 		def finish
-			walkers.shutdown if walkers.active?
+			walkers.each { @queue << nil }
+			walkers.each(&:join)
+			walkers.clear
 		end
 
 		private
