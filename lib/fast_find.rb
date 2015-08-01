@@ -57,9 +57,10 @@ module FastFind
 			startup
 
 			paths.map!(&:dup).each do |path|
-				pending << path
-				@queue << [path, nil, results]
+				results << [path, Util.safe_stat(path)]
 			end
+			results << [:initial, :finished]
+			pending << :initial
 
 			while result = results.deq
 				path, stat = result
@@ -74,10 +75,9 @@ module FastFind
 					end
 				end
 
-				raise stat if stat.is_a?(Exception) and !ignore_error
-
 				catch(:prune) do
-					yield_entry(result, block)
+					yield_entry(result, block) unless path == :exception
+					raise stat if stat.is_a?(Exception) and !ignore_error
 
 					if stat.is_a?(File::Stat) and stat.directory? and !pending.include?(path)
 						pending << path
@@ -112,35 +112,31 @@ module FastFind
 			end
 		end
 
-		def safe_stat(path)
-			File.lstat(path)
-		rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
-		       Errno::ENAMETOOLONG => e
-			e
-		end
-
 		def walk(path, stat, results)
-			unless stat
-				stat = safe_stat(path)
-				results << [path, stat]
-			end
-
 			if stat.is_a?(File::Stat) and stat.directory?
 				Dir.new(path).each do |entry|
 					next if entry == '.' or entry == '..'
 
 					entry = File.join(path, entry)
-					stat = safe_stat(entry)
+					stat = Util.safe_stat(entry)
 
 					results << [entry, stat]
 				end
 			end
 		rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
 		       Errno::ENAMETOOLONG => e
-			# Unreadable directory
-			# TODO: if ignore_error = false, we should raise this
+			results << [:exception, e]
 		ensure
 			results << [path, :finished]
+		end
+	end
+
+	module Util
+		def self.safe_stat(path)
+			File.lstat(path)
+		rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
+		       Errno::ENAMETOOLONG => e
+			e
 		end
 	end
 end
