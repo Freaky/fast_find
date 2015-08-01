@@ -15,7 +15,7 @@ This code is considered experimental.  Beware of dog.
 
 Add this line to your application's Gemfile:
 
-    gem 'fast_find', git: 'https://github.com/Freaky/fast_find.git'
+    gem 'fast_find'
 
 And then execute:
 
@@ -74,7 +74,7 @@ ruby 2.2.2p95 (2015-04-13 revision 50295) [x86_64-freebsd10.1]:
     FastFind   9.039062  14.226562  23.265625 ( 23.277589)
 
 On MRI `Find` here is penalised because both `Find` and the benchmark code is
-performing a `File#lstat`.
+performing a `File#lstat`.  This matches common use-cases.
 
 ## Development
 
