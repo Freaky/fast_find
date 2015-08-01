@@ -77,10 +77,10 @@ module FastFind
 				end
 
 				catch(:prune) do
-					yield_entry(result, block) unless path == :exception
+					yield_entry(result, block) if path.is_a? String
 
 					case stat
-					when Exception then raise stat if !ignore_error
+					when Exception then raise stat unless ignore_error
 					when File::Stat
 						if stat.directory? and !pending.include?(pe = [path, path.encoding])
 							pending << pe
