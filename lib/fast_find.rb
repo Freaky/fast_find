@@ -32,7 +32,7 @@ module FastFind
 			@mutex.synchronize do
 				return if @walkers
 
-				@walkers = concurrency.times.map { Walker.new.spawn(@queue) }
+				@walkers = @concurrency.times.map { Walker.new.spawn(@queue) }
 			end
 		end
 
@@ -41,8 +41,8 @@ module FastFind
 				return unless @walkers
 
 				@queue.clear
-				walkers.each { @queue << nil }
-				walkers.each(&:join)
+				@walkers.each { @queue << nil }
+				@walkers.each(&:join)
 
 				@walkers = nil
 			end
@@ -89,13 +89,15 @@ module FastFind
 				end
 			end
 		ensure
-			if one_shot
+			if one_shot?
 				@queue.clear
 				shutdown
 			end
 		end
 
 		private
+
+		def one_shot?() !!@one_shot end
 
 		def yield_entry(entry, block)
 			if block.arity == 2
@@ -104,8 +106,6 @@ module FastFind
 				block.call entry[0].dup
 			end
 		end
-
-		attr_reader :walkers, :one_shot, :concurrency
 	end
 
 	class Walker
