@@ -57,16 +57,17 @@ module FastFind
 			startup
 
 			paths.map!(&:dup).each do |path|
+				path = path.to_path if path.respond_to? :to_path
 				results << [path, Util.safe_stat(path)]
 			end
 			results << [:initial, :finished]
-			pending << :initial
+			pending << [:initial, :initial.encoding]
 
 			while result = results.deq
 				path, stat = result
 
 				if stat == :finished
-					pending.delete(path)
+					pending.delete([path, path.encoding])
 
 					if pending.empty?
 						break
@@ -81,8 +82,8 @@ module FastFind
 					case stat
 					when Exception then raise stat if !ignore_error
 					when File::Stat
-						if stat.directory? and !pending.include?(path)
-							pending << path
+						if stat.directory? and !pending.include?(pe = [path, path.encoding])
+							pending << pe
 							@queue << [path, results]
 						end
 					end
@@ -101,9 +102,9 @@ module FastFind
 
 		def yield_entry(entry, block)
 			if block.arity == 2
-				block.call(entry[0].dup, entry[1])
+				block.call(entry[0].dup.taint, entry[1])
 			else
-				block.call entry[0].dup
+				block.call entry[0].dup.taint
 			end
 		end
 	end
@@ -111,6 +112,7 @@ module FastFind
 	class Walker
 		def spawn(queue)
 			Thread.new do
+				@encoding = Encoding.find("filesystem")
 				while job = queue.deq
 					walk(job[0], job[1])
 				end
@@ -118,7 +120,9 @@ module FastFind
 		end
 
 		def walk(path, results)
-			Dir.new(path).each do |entry|
+			enc = path.encoding == Encoding::US_ASCII ? @encoding : path.encoding
+
+			Dir.entries(path, encoding: enc).each do |entry|
 				next if entry == '.' or entry == '..'
 
 				stat(File.join(path, entry), results)

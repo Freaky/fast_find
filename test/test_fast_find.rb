@@ -272,7 +272,6 @@ class TestFastfind < Minitest::Test
   end
 
   def test_encoding_ascii
-    skip "no encoding support yet"
     Dir.mktmpdir {|d|
       File.open("#{d}/a", "w"){}
       Dir.mkdir("#{d}/b")
@@ -285,7 +284,6 @@ class TestFastfind < Minitest::Test
   end
 
   def test_encoding_non_ascii
-    skip "no encoding support yet"
     Dir.mktmpdir {|d|
       File.open("#{d}/a", "w"){}
       Dir.mkdir("#{d}/b")
@@ -296,13 +294,13 @@ class TestFastfind < Minitest::Test
       Find.find(d.encode(euc_jp), d.encode(win_31j), d.encode(utf_8)) {|f| a << [f, f.encoding] }
       assert_equal([[d, euc_jp], ["#{d}/a", euc_jp], ["#{d}/b", euc_jp],
                     [d, win_31j], ["#{d}/a", win_31j], ["#{d}/b", win_31j],
-                    [d, utf_8], ["#{d}/a", utf_8], ["#{d}/b", utf_8]],
-                   a)
+                    [d, utf_8], ["#{d}/a", utf_8], ["#{d}/b", utf_8]].sort_by(&:inspect),
+                   a.sort_by(&:inspect))
       if /mswin|mingw/ =~ RUBY_PLATFORM
         a = []
         Dir.mkdir("#{d}/\u{2660}")
         Find.find("#{d}".encode(utf_8)) {|f| a << [f, f.encoding] }
-        assert_equal([[d, utf_8], ["#{d}/a", utf_8], ["#{d}/b", utf_8], ["#{d}/\u{2660}", utf_8]], a)
+        assert_equal([[d, utf_8], ["#{d}/a", utf_8], ["#{d}/b", utf_8], ["#{d}/\u{2660}", utf_8]].sort_by(&:inspect), a.sort_by(&:inspect))
       end
     }
   end
