@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.description   = %q{FastFind is a find workalike which optionally passes
                        in the File::Stat to the block, and can use multile
                        threads to walk directories concurrently.}
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.homepage      = "https://github.com/Freaky/fast_find"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
