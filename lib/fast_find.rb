@@ -89,8 +89,10 @@ module FastFind
 				end
 			end
 		ensure
-			@queue.clear
-			shutdown if one_shot
+			if one_shot
+				@queue.clear
+				shutdown
+			end
 		end
 
 		private
