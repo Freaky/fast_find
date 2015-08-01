@@ -81,7 +81,7 @@ module FastFind
 
 					if stat.is_a?(File::Stat) and stat.directory? and !pending.include?(path)
 						pending << path
-						@queue << [path, stat, results]
+						@queue << [path, results]
 					end
 				end
 			end
@@ -107,27 +107,34 @@ module FastFind
 		def spawn(queue)
 			Thread.new do
 				while job = queue.deq
-					walk(*job)
+					walk(job[0], job[1])
 				end
 			end
 		end
 
-		def walk(path, stat, results)
-			if stat.is_a?(File::Stat) and stat.directory?
-				Dir.new(path).each do |entry|
-					next if entry == '.' or entry == '..'
+		def walk(path, results)
+			Dir.new(path).each do |entry|
+				next if entry == '.' or entry == '..'
 
-					entry = File.join(path, entry)
-					stat = Util.safe_stat(entry)
-
-					results << [entry, stat]
-				end
+				stat(File.join(path, entry), results)
 			end
 		rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
 		       Errno::ENAMETOOLONG => e
-			results << [:exception, e]
+			error(e, results)
 		ensure
+			finish(path, results)
+		end
+
+		def stat(entry, results)
+			results << [entry, Util.safe_stat(entry)]
+		end
+
+		def finish(path, results)
 			results << [path, :finished]
+		end
+
+		def error(e, results)
+			results << [:exception, e]
 		end
 	end
 
