@@ -61,13 +61,13 @@ module FastFind
 				results << [path, Util.safe_stat(path)]
 			end
 			results << [:initial, :finished]
-			pending << [:initial, :initial.encoding]
+			pending << path_signature(:initial)
 
 			while result = results.deq
 				path, stat = result
 
 				if stat == :finished
-					pending.delete([path, path.encoding])
+					pending.delete(path_signature(path))
 
 					if pending.empty?
 						break
@@ -79,15 +79,12 @@ module FastFind
 				catch(:prune) do
 					yield_entry(result, block) if path.is_a? String
 
-					case stat
-					when Exception then raise stat unless ignore_error
-					when File::Stat
-						if stat.directory? and !pending.include?(pe = [path, path.encoding])
-							pending << pe
-							@queue << [path, results]
-						end
+					if stat.is_a? File::Stat and stat.directory? and pending.add?(path_signature(path))
+						@queue << [path, results]
 					end
 				end
+
+				raise stat if stat.is_a? Exception and !ignore_error
 			end
 		ensure
 			if one_shot?
@@ -97,6 +94,10 @@ module FastFind
 		end
 
 		private
+
+		def path_signature(path)
+			[path, path.encoding]
+		end
 
 		def one_shot?() !!@one_shot end
 
