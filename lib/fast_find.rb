@@ -67,9 +67,7 @@ module FastFind
 				path, stat = result
 
 				if stat == :finished
-					pending.delete(path_signature(path))
-
-					if pending.empty?
+					if pending.delete(path_signature(path)).empty?
 						break
 					else
 						next
