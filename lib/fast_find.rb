@@ -12,7 +12,7 @@ module FastFind
 	def self.find(*paths, concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
 	              &block)
 		Finder.new(concurrency: concurrency, one_shot: true)
-			.find(*paths, ignore_error: ignore_error, &block)
+		      .find(*paths, ignore_error: ignore_error, &block)
 	end
 
 	def self.prune
