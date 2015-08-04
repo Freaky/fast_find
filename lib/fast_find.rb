@@ -111,9 +111,10 @@ module FastFind
 	end
 
 	class Walker
+		FS_ENCODING = Encoding.find("filesystem")
+
 		def spawn(queue)
 			Thread.new do
-				@encoding = Encoding.find("filesystem")
 				while job = queue.deq
 					walk(job[0], job[1])
 				end
@@ -121,7 +122,7 @@ module FastFind
 		end
 
 		def walk(path, results)
-			enc = path.encoding == Encoding::US_ASCII ? @encoding : path.encoding
+			enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
 
 			Dir.entries(path, encoding: enc).each do |entry|
 				next if entry == '.' or entry == '..'
