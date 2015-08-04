@@ -99,7 +99,7 @@ module FastFind
 			[path, path.encoding]
 		end
 
-		def one_shot?() !!@one_shot end
+		def one_shot?() @one_shot end
 
 		def yield_entry(entry, block)
 			if block.arity == 2
