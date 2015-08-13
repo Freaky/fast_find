@@ -11,7 +11,7 @@ module FastFind
 
 	def self.find(*paths, concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
 	              &block)
-		Finder.new(concurrency: concurrency, one_shot: true)
+		Finder.new(concurrency: concurrency)
 		      .find(*paths, ignore_error: ignore_error, &block)
 	end
 
@@ -20,25 +20,27 @@ module FastFind
 	end
 
 	class Finder
-		def initialize(concurrency: DEFAULT_CONCURRENCY, one_shot: false)
+		def initialize(concurrency: DEFAULT_CONCURRENCY, persist: false)
 			@mutex       = Mutex.new
 			@queue       = Queue.new
-			@one_shot    = one_shot
+			@persist     = persist
 			@concurrency = concurrency
 			@walkers     = nil
+			@workers     = 0
 		end
 
 		def startup
-			@mutex.synchronize do
+			lock do
 				return if @walkers
 
 				@walkers = @concurrency.times.map { Walker.new.spawn(@queue) }
 			end
 		end
 
-		def shutdown
-			@mutex.synchronize do
+		def shutdown(force: false)
+			lock do
 				return unless @walkers
+				raise "running jobs" unless @workers.zero? or force
 
 				@queue.clear
 				@walkers.each { @queue << nil }
@@ -54,50 +56,63 @@ module FastFind
 			results = Queue.new
 			pending = Set.new
 
-			startup
-
-			paths.map!(&:dup).each do |path|
-				path = path.to_path if path.respond_to? :to_path
-				results << [path, Util.safe_stat(path)]
-			end
-			results << [:initial, :finished]
-			pending << path_signature(:initial)
-
-			while result = results.deq
-				path, stat = result
-
-				if stat == :finished
-					if pending.delete(path_signature(path)).empty?
-						break
-					else
-						next
-					end
+			working do
+				paths.map!(&:dup).each do |path|
+					path = path.to_path if path.respond_to? :to_path
+					results << [path, Util.safe_stat(path)]
 				end
+				results << [:initial, :finished]
+				pending << path_signature(:initial)
 
-				catch(:prune) do
-					yield_entry(result, block) if path.is_a? String
+				while result = results.deq
+					path, stat = result
 
-					if stat.is_a? File::Stat and stat.directory? and pending.add?(path_signature(path))
-						@queue << [path, results]
+					if stat == :finished
+						if pending.delete(path_signature(path)).empty?
+							break
+						else
+							next
+						end
 					end
-				end
 
-				raise stat if stat.is_a? Exception and !ignore_error
+					catch(:prune) do
+						yield_entry(result, block) if path.is_a? String
+
+						if stat.is_a? File::Stat and stat.directory? and pending.add?(path_signature(path))
+							@queue << [path, results]
+						end
+					end
+
+					raise stat if stat.is_a? Exception and !ignore_error
+				end
 			end
 		ensure
-			if one_shot?
-				@queue.clear
+			if !persist? and @workers.zero?
 				shutdown
 			end
 		end
 
 		private
 
+		def working
+			startup
+			lock { @workers += 1 }
+			yield
+		ensure
+			lock { @workers -= 1 }
+		end
+
+		def lock
+			@mutex.synchronize do
+				yield
+			end
+		end
+
 		def path_signature(path)
 			[path, path.encoding]
 		end
 
-		def one_shot?() @one_shot end
+		def persist?() @persist end
 
 		def yield_entry(entry, block)
 			if block.arity == 2
