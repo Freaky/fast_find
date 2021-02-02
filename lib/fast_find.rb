@@ -49,6 +49,8 @@ module FastFind
 
         raise stat if stat.is_a?(Exception) && !ignore_error
       end
+    ensure
+      results.close if results
     end
 
     private
