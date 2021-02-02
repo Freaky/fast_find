@@ -9,10 +9,10 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Thomas Hurst"]
   spec.email         = ["tom@hur.st"]
 
-  spec.summary       = %q{High performance 'find' alternative.}
-  spec.description   = %q{FastFind is a find workalike which optionally passes
-                       in the File::Stat to the block, and can use multile
-                       threads to walk directories concurrently.}
+  spec.summary       = %q{Multi-threaded Find alternative.}
+  spec.description   = %q{FastFind is a high-performance Find alternative for
+                          Ruby implementations with effective thread
+                          concurrency, particularly JRuby.}
   spec.homepage      = "https://github.com/Freaky/fast_find"
   spec.license       = "MIT"
 
