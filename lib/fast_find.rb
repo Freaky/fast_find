@@ -1,168 +1,112 @@
 # frozen_string_literal: true
 
 require 'set'
+
+require 'concurrent'
+
 require 'fast_find/version'
 
 # A Find workalike optimized for multithreaded operation on supporting Rubies
 module FastFind
-  DEFAULT_CONCURRENCY = %w[jruby rbx].include?(RUBY_ENGINE) ? 8 : 1
+  class << self
+    attr_accessor :default_executor
 
-  def self.find(*paths, concurrency: DEFAULT_CONCURRENCY, ignore_error: true,
-                &block)
-    Finder.new(concurrency: concurrency)
-          .find(*paths, ignore_error: ignore_error, &block)
-  end
-
-  def self.prune
-    throw :prune
-  end
-
-  # For best performance, create a single instance of Finder with persist: true
-  #
-  # This class is thread-safe.
-  class Finder
-    def initialize(concurrency: DEFAULT_CONCURRENCY, persist: false)
-      @mutex       = Mutex.new
-      @queue       = Queue.new
-      @persist     = persist
-      @concurrency = concurrency
-      @walkers     = nil
-      @workers     = 0
+    def prune
+      throw :prune
     end
 
-    def startup
-      lock do
-        return if @walkers
+    def find(*paths, ignore_error: true, executor: default_executor, &block)
+      block or return enum_for(__method__, *paths, ignore_error: ignore_error, executor: executor)
 
-        @walkers = @concurrency.times.map { Walker.new.spawn(@queue) }
-      end
-    end
-
-    def shutdown(force: false)
-      lock do
-        return unless @walkers
-        raise 'running jobs' unless @workers.zero? || force
-
-        @queue.clear
-        @queue.close
-        @walkers.each(&:join)
-
-        @walkers = nil
-      end
-    end
-
-    def find(*paths, ignore_error: true, &block)
-      block or return enum_for(__method__, *paths, ignore_error: ignore_error)
-
-      results = Queue.new
+      results = SizedQueue.new(1024)
       pending = Set.new
 
-      working do
-        paths.map!(&:dup).each do |path|
-          path = path.to_path if path.respond_to? :to_path
-          results << [path, Util.safe_stat(path)]
-        end
-        results << %i[initial finished]
-        pending << path_signature(:initial)
-
-        while (result = results.deq)
-          path, stat = result
-
-          if stat == :finished
-            break if pending.delete(path_signature(path)).empty?
-
-            next
-          end
-
-          catch(:prune) do
-            yield_entry(result, block) if path.is_a? String
-
-            @queue << [path, results] if stat.is_a?(File::Stat) && stat.directory? && pending.add?(path_signature(path))
-          end
-
-          raise stat if stat.is_a?(Exception) && !ignore_error
-        end
+      paths.map!(&:dup).each do |path|
+        path = path.to_path if path.respond_to? :to_path
+        results << [path, safe_stat(path)]
       end
-    ensure
-      shutdown if !persist? && @workers.zero?
+      results << %i[initial finished]
+      pending << path_signature(:initial)
+
+      while (result = results.deq)
+        path, stat = result
+
+        if stat == :finished
+          break if pending.delete(path_signature(path)).empty?
+
+          next
+        end
+
+        catch(:prune) do
+          yield_entry(result, block) if path.is_a? String
+
+          if stat.is_a?(File::Stat) && stat.directory? && pending.add?(path_signature(path))
+            executor.post(path, results) do |path_, results_|
+              walk(path_, results_)
+            end
+          end
+        end
+
+        raise stat if stat.is_a?(Exception) && !ignore_error
+      end
     end
 
     private
 
-    def working
-      startup
-      lock { @workers += 1 }
-      yield
+    FS_ENCODING = Encoding.find('filesystem')
+
+    def walk(path, results)
+      enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
+
+      # This benchmarks as about 10% faster than Dirs.foreach
+      Dir.entries(path, encoding: enc).each do |entry|
+        next if (entry == '.') || (entry == '..')
+
+        results << stat(File.join(path, entry))
+      end
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
+           Errno::ENAMETOOLONG => e
+      results << error(e)
     ensure
-      lock { @workers -= 1 }
+      results << finish(path)
     end
 
-    def lock(&block)
-      @mutex.synchronize(&block)
+    def stat(entry)
+      [entry, safe_stat(entry)]
+    end
+
+    def finish(path)
+      [path, :finished]
+    end
+
+    def error(e)
+      [:exception, e]
     end
 
     def path_signature(path)
       [path, path.encoding]
     end
 
-    def persist?
-      @persist
-    end
-
     def yield_entry(entry, block)
       if block.arity == 2
-        block.call(entry[0].dup.taint, entry[1])
+        block.call(entry[0].dup, entry[1])
       else
-        block.call entry[0].dup.taint
-      end
-    end
-  end
-
-  class Walker
-    FS_ENCODING = Encoding.find('filesystem')
-
-    def spawn(queue)
-      Thread.new do
-        while (job = queue.deq)
-          walk(job[0], job[1])
-        end
+        block.call entry[0].dup
       end
     end
 
-    def walk(path, results)
-      enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
-
-      Dir.entries(path, encoding: enc).each do |entry|
-        next if (entry == '.') || (entry == '..')
-
-        stat(File.join(path, entry), results)
-      end
-    rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
-           Errno::ENAMETOOLONG => e
-      error(e, results)
-    ensure
-      finish(path, results)
-    end
-
-    def stat(entry, results)
-      results << [entry, Util.safe_stat(entry)]
-    end
-
-    def finish(path, results)
-      results << [path, :finished]
-    end
-
-    def error(e, results)
-      results << [:exception, e]
-    end
-  end
-
-  module Util
-    def self.safe_stat(path)
+    def safe_stat(path)
       File.lstat(path)
     rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP,
            Errno::ENAMETOOLONG => e
       e
     end
   end
+
+  self.default_executor = case RUBY_ENGINE
+                          when 'jruby', 'rbx'
+                            Concurrent::FixedThreadPool.new(8, idletime: 60)
+                          else
+                            Concurrent::FixedThreadPool.new(1, idletime: 60)
+                          end
 end

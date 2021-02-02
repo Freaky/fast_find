@@ -1,80 +1,90 @@
 # FastFind
 
-FastFind is a performance-oriented multi-threaded alternative to the standard
-`Find` module that ships with Ruby.  It should generally be a drop-in
-replacement.
+`FastFind` is a multi-threaded alternative to the standard `Find` module,
+offering increased performance on Rubies which can run `Dir#entries` and
+`File#lstat` calls concurrently (i.e. JRuby).
 
-FastFind is expected to be marginally slower on MRI/YARV, since multithreaded
-`File#lstat` calls there appear to serialize.  However, using the FastFind-
-specific second argument to pass in the `File::Stat` object for each file may
-still prove a win.
-
-This code is considered experimental.  Beware of dog.
+While it can operate as a drop-in replacement for `Find`, it's best used with
+a two-argument block which also yields the `File::Stat` object associated with
+each yielded path.
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
-    gem 'fast_find'
+```shell
+gem 'fast_find'
+```
 
 And then execute:
 
-    $ bundle
+```shell
+$ bundle
+```
 
 ## Usage
 
-Traditional Find-style:
+Traditional Find-style (not recommended):
 
-    FastFind.find(dir) {|entry| frob(entry) }
-    FastFind.find(dir, ignore_errors: false) { .. } # => explodes in your face
-    FastFind.find(dir) # => Enumerator
+```ruby
+FastFind.find(dir) { |entry| frob(entry) }
+FastFind.find(dir, ignore_errors: false) { .. } # => explodes in your face
+FastFind.find(dir) # => Enumerator
+```
 
 Extended style using the second argument to get a `File::Stat`, or `Exception`
-object (if `ignore_errors` is false, this will be raised instead).
+object (if `ignore_errors` is false, this will be raised after the block).
 
-    FastFind.find(dir) {|entry, stat| frob(entry, stat) }
+```ruby
+FastFind.find(dir) { |entry, stat| frob(entry, stat) }
+```
 
-For increased performance and better scaling behaviour, it is recommended to use
-a single shared FastFind object.  Multiple concurrent calls to
-`FastFind::Finder#find` are safe and will share a persistant work pool.
+`FastFind` uses a concurrent-ruby executor to run, which can be customised
+by passing it as a named argument:
 
-    Finder = FastFind::Finder.new
-    Finder.find(dir) { .. }
+```ruby
+executor = Concurrent::FixedThreadPool.new(16, idletime: 90)
+FastFind.find(dir, executor: executor)
+```
 
-You can call `Finder#shutdown` to close the work pool if you're done with the
-instance for the time being.  Ensure no other calls to its `#find` are in flight
-beforehand.  The pool is restarted the next time `#find` is called.
+Or while no concurrent `find` operations are in progress, to the module itself:
 
-Use the `concurrency` named argument to change the number of worker threads:
+```ruby
+FastFind.default_executor = Concurrent::FixedThreadPool.new(16, idletime: 90)
+```
 
-    FastFind.find(dir, concurrency: 4)
-    FastFind::Finder.new(concurrency: 4)
+Due to the use of a bounded result queue it is *not* recommended to use an
+executor with a bounded queue or which runs in the same thread as this may
+result in deadlocks or dropped results.
 
-Defaults are `8` for Rubinius and JRuby, `1` for anything else.
-
-Note the yielded blocks are all executed in the parent thread, *not* in workers.
-
-`FastFind#prune` works.  So does `Find#prune`.
+As with `Find`, `FastFind#prune` will avoid recursing into a directory.
 
 ## Performance
 
-Scanning a cached copy of the NetBSD CVS repository:
+Scanning a cached copy of the NetBSD CVS repository wtih default settings:
 
-jruby 9.0.1.0-SNAPSHOT (2.2.2) 2015-07-23 e88911e OpenJDK 64-Bit Server VM
-25.51-b03 on 1.8.0_51-b16 +jit [FreeBSD-amd64]:
+jruby 9.2.14.0 (2.5.7) 2020-12-08 ebe64bafb9 OpenJDK 64-Bit Server VM 15.0.2+7-1 on 15.0.2+7-1 +jit:
 
-                   user     system      total        real
-    Find      32.890625  27.742188  60.632813 ( 47.518944)
-    FastFind  35.273438  41.742188  77.015625 (  8.140893)
+```
+                       user     system      total        real
+FastFind          22.296875  40.851562  63.148438 (  8.014612)
+Find              15.179688  28.031250  43.210938 ( 43.036654)
+FastFind as Find  37.679688  44.375000  82.054688 ( 29.502235)
+```
 
-ruby 2.2.2p95 (2015-04-13 revision 50295) [x86_64-freebsd10.1]:
+These results highlight the importance of the two-argument version.
 
-                   user     system      total        real
-    Find      10.187500  22.351562  32.539062 ( 32.545201)
-    FastFind   9.039062  14.226562  23.265625 ( 23.277589)
+ruby 3.0.0p0 (2020-12-25 revision 95aff21468) \[x86_64-freebsd12.2]:
 
-On MRI `Find` here is penalised because both `Find` and the benchmark code is
-performing a `File#lstat`.  This matches common use-cases.
+```
+                       user     system      total        real
+FastFind          30.436830  29.265892  59.702722 ( 41.432262)
+Find              10.346662  20.317705  30.664367 ( 30.666812)
+FastFind as Find  28.300448  35.654871  63.955319 ( 39.212032)
+```
+
+Sadly the current implementation is a significant pessimisation on MRI, likely
+due to thread overhead.
 
 ## Development
 

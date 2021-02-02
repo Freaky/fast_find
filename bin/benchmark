@@ -7,30 +7,43 @@ require 'benchmark'
 require 'bundler/setup'
 require 'fast_find'
 
-FastFinder = FastFind::Finder.new
-
 test_dirs = ARGV
 abort("Usage: #{$PROGRAM_NAME} [dir1 [dir2[ ..]]]") if test_dirs.empty?
 
 Benchmark.bmbm do |b|
-  b.report('Find') do
-    files = Set.new
-    Find.find(*test_dirs) do |f|
-      files << [f, File.lstat(f)]
+  b.report('FastFind') do
+    files = directories = 0
+    FastFind.find(*test_dirs) do |f, stat|
+      if stat.directory?
+        directories += 1
+      else
+        files += 1
+      end
+      # files << [f, stat]
     end
   end
 
-  b.report('FastFind') do
-    files = Set.new
-    FastFinder.find(*test_dirs) do |f, stat|
-      files << [f, stat]
+  b.report('Find') do
+    files = directories = 0
+    Find.find(*test_dirs) do |f|
+      if File.directory?(f)
+        directories += 1
+      else
+        files += 1
+      end
+      # files << [f, File.lstat(f)]
     end
   end
 
   b.report('FastFind as Find') do
-    files = Set.new
-    FastFinder.find(*test_dirs) do |f|
-      files << [f, File.lstat(f)]
+    files = directories = 0
+    FastFind.find(*test_dirs) do |f|
+      if File.directory?(f)
+        directories += 1
+      else
+        files += 1
+      end
+      # files << [f, File.lstat(f)]
     end
   end
 end
