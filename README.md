@@ -67,9 +67,9 @@ jruby 9.2.14.0 (2.5.7) 2020-12-08 ebe64bafb9 OpenJDK 64-Bit Server VM 15.0.2+7-1
 
 ```
                        user     system      total        real
-FastFind          22.234375  41.960938  64.195312 (  7.802535)
-Find              16.296875  27.039062  43.335938 ( 43.146711)
-FastFind as Find  36.726562  45.351562  82.078125 ( 27.517757)
+FastFind          20.492188  41.898438  62.390625 (  7.558871)
+Find              14.742188  27.804688  42.546875 ( 42.355761)
+FastFind as Find  33.648438  44.757812  78.406250 ( 26.047635)
 ```
 
 These results highlight the importance of the two-argument version.
@@ -78,9 +78,9 @@ ruby 3.0.0p0 (2020-12-25 revision 95aff21468) \[x86_64-freebsd12.2]:
 
 ```
                        user     system      total        real
-FastFind          29.846702  28.172270  58.018972 ( 40.969695)
-Find              10.504729  20.128838  30.633567 ( 30.635651)
-FastFind as Find  26.437174  36.194740  62.631914 ( 38.446520)
+FastFind          27.181013  26.598176  53.779189 ( 38.016831)
+Find              10.672928  20.198666  30.871594 ( 30.878547)
+FastFind as Find  27.008096  36.266163  63.274259 ( 38.832825)
 ```
 
 Sadly the current implementation is a significant pessimisation on MRI, likely

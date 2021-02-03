@@ -36,8 +36,6 @@ module FastFind
 
       while (result = results.deq)
         case result
-        when Types::DirFinished
-          break if pending.delete(path_signature(result.path)).empty?
         when Types::EntryStat
           catch(:prune) do
             yielder.call(result)
@@ -48,6 +46,8 @@ module FastFind
               end
             end
           end
+        when Types::DirFinished
+          break if pending.delete(path_signature(result.path)).empty?
         when Types::EntryError
           yielder.call(result)
           raise result.val unless ignore_error
@@ -73,12 +73,14 @@ module FastFind
     def walk(path, results)
       enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
 
-      # This benchmarks as about 10% faster than Dirs.foreach
+      # This benchmarks as about 10% faster than Dirs.each_child
       Dir.children(path, encoding: enc).each do |entry|
         results << stat(File.join(path, entry))
       end
     rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP, Errno::ENAMETOOLONG => e
       results << Types::DirError.new(path, e)
+    rescue => e
+      warn e
     ensure
       results << Types::DirFinished.new(path)
     end
