@@ -19,7 +19,6 @@ Benchmark.bmbm do |b|
       else
         files += 1
       end
-      # files << [f, stat]
     end
   end
 
@@ -31,7 +30,6 @@ Benchmark.bmbm do |b|
       else
         files += 1
       end
-      # files << [f, File.lstat(f)]
     end
   end
 
@@ -43,7 +41,6 @@ Benchmark.bmbm do |b|
       else
         files += 1
       end
-      # files << [f, File.lstat(f)]
     end
   end
 end

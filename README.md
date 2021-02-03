@@ -61,15 +61,15 @@ As with `Find`, `FastFind#prune` will avoid recursing into a directory.
 
 ## Performance
 
-Scanning a cached copy of the NetBSD CVS repository wtih default settings:
+Scanning a cached copy of the NetBSD CVS repository with default settings:
 
 jruby 9.2.14.0 (2.5.7) 2020-12-08 ebe64bafb9 OpenJDK 64-Bit Server VM 15.0.2+7-1 on 15.0.2+7-1 +jit:
 
 ```
                        user     system      total        real
-FastFind          22.296875  40.851562  63.148438 (  8.014612)
-Find              15.179688  28.031250  43.210938 ( 43.036654)
-FastFind as Find  37.679688  44.375000  82.054688 ( 29.502235)
+FastFind          22.234375  41.960938  64.195312 (  7.802535)
+Find              16.296875  27.039062  43.335938 ( 43.146711)
+FastFind as Find  36.726562  45.351562  82.078125 ( 27.517757)
 ```
 
 These results highlight the importance of the two-argument version.
@@ -78,9 +78,9 @@ ruby 3.0.0p0 (2020-12-25 revision 95aff21468) \[x86_64-freebsd12.2]:
 
 ```
                        user     system      total        real
-FastFind          30.436830  29.265892  59.702722 ( 41.432262)
-Find              10.346662  20.317705  30.664367 ( 30.666812)
-FastFind as Find  28.300448  35.654871  63.955319 ( 39.212032)
+FastFind          29.846702  28.172270  58.018972 ( 40.969695)
+Find              10.504729  20.128838  30.633567 ( 30.635651)
+FastFind as Find  26.437174  36.194740  62.631914 ( 38.446520)
 ```
 
 Sadly the current implementation is a significant pessimisation on MRI, likely
