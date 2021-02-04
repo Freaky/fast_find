@@ -73,7 +73,8 @@ module FastFind
       results << Types::DirFinished.new(:initial)
       pending << path_signature(:initial)
 
-      while (result = results.deq)
+      until pending.empty?
+        result = results.deq
         case result
         when Types::EntryStat
           catch(:prune) do
@@ -86,7 +87,7 @@ module FastFind
             end
           end
         when Types::DirFinished
-          break if pending.delete(path_signature(result.path)).empty?
+          pending.delete(path_signature(result.path))
         when Types::EntryError
           yielder.call(result)
           raise result.val unless ignore_error
