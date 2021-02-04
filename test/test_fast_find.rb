@@ -286,6 +286,7 @@ class TestFastfind < Minitest::Test
   end
 
   def test_encoding_non_ascii
+    skip if RUBY_ENGINE == 'jruby' # JRuby doesn't handle path encodings yet
     Dir.mktmpdir do |d|
       File.open("#{d}/a", 'w') {}
       Dir.mkdir("#{d}/b")
