@@ -1,12 +1,11 @@
 # FastFind
 
 `FastFind` is a multi-threaded alternative to the standard `Find` module,
-offering increased performance on Rubies which can run `Dir#entries` and
+offering increased performance on Rubies which can run `Dir#children` and
 `File#lstat` calls concurrently (i.e. JRuby).
 
-While it can operate as a drop-in replacement for `Find`, it's best used with
-a two-argument block which also yields the `File::Stat` object associated with
-each yielded path.
++FastFind+ has a slightly different API and cannot be used as a drop-in
+replacement.
 
 ## Installation
 
@@ -24,30 +23,26 @@ $ bundle
 
 ## Usage
 
-Traditional Find-style (not recommended):
+`FastFind` is driven primarily by `FastFind::Walk` instances, which are created
+by chaining methods.  Each instance is immutable and inert, and can be shared
+between threads.
 
 ```ruby
-FastFind.find(dir) { |entry| frob(entry) }
-FastFind.find(dir, ignore_errors: false) { .. } # => explodes in your face
-FastFind.find(dir) # => Enumerator
-```
-
-Extended style using the second argument to get a `File::Stat`, or `Exception`
-object (if `ignore_errors` is false, this will be raised after the block).
-
-```ruby
-FastFind.find(dir) { |entry, stat| frob(entry, stat) }
+finder = FastFind.paths(dir)
+finder.each { |entry| frob(entry.path) }
+finder.on_error(:raise).to_a # Make an array of DirEntry instances or raise an exception
+finder.each # => Enumerator
 ```
 
 `FastFind` uses a concurrent-ruby executor to run, which can be customised
-by passing it as a named argument:
+by passing it as a builder argument:
 
 ```ruby
 executor = Concurrent::FixedThreadPool.new(16, idletime: 90)
-FastFind.find(dir, executor: executor)
+finder_with_executor = FastFind.executor(executor)
 ```
 
-Or while no concurrent `find` operations are in progress, to the module itself:
+Or to the module itself:
 
 ```ruby
 FastFind.default_executor = Concurrent::FixedThreadPool.new(16, idletime: 90)
@@ -66,10 +61,9 @@ Scanning a cached copy of the NetBSD CVS repository with default settings:
 jruby 9.2.14.0 (2.5.7) 2020-12-08 ebe64bafb9 OpenJDK 64-Bit Server VM 15.0.2+7-1 on 15.0.2+7-1 +jit:
 
 ```
-                       user     system      total        real
-FastFind          20.492188  41.898438  62.390625 (  7.558871)
-Find              14.742188  27.804688  42.546875 ( 42.355761)
-FastFind as Find  33.648438  44.757812  78.406250 ( 26.047635)
+               user     system      total        real
+FastFind  22.453125  42.609375  65.062500 (  7.785491)
+Find      15.929688  27.882812  43.812500 ( 43.750860)
 ```
 
 These results highlight the importance of the two-argument version.
@@ -77,10 +71,9 @@ These results highlight the importance of the two-argument version.
 ruby 3.0.0p0 (2020-12-25 revision 95aff21468) \[x86_64-freebsd12.2]:
 
 ```
-                       user     system      total        real
-FastFind          27.181013  26.598176  53.779189 ( 38.016831)
-Find              10.672928  20.198666  30.871594 ( 30.878547)
-FastFind as Find  27.008096  36.266163  63.274259 ( 38.832825)
+               user     system      total        real
+FastFind  22.056920  18.092734  40.149654 ( 36.409812)
+Find      10.233514  21.035376  31.268890 ( 31.270866)
 ```
 
 Sadly the current implementation is a significant pessimisation on MRI, likely

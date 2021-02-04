@@ -13,8 +13,8 @@ abort("Usage: #{$PROGRAM_NAME} [dir1 [dir2[ ..]]]") if test_dirs.empty?
 Benchmark.bmbm do |b|
   b.report('FastFind') do
     files = directories = 0
-    FastFind.find(*test_dirs) do |f, stat|
-      if stat.directory?
+    FastFind.paths(*test_dirs).each do |entry|
+      if entry.directory?
         directories += 1
       else
         files += 1
@@ -25,17 +25,6 @@ Benchmark.bmbm do |b|
   b.report('Find') do
     files = directories = 0
     Find.find(*test_dirs) do |f|
-      if File.directory?(f)
-        directories += 1
-      else
-        files += 1
-      end
-    end
-  end
-
-  b.report('FastFind as Find') do
-    files = directories = 0
-    FastFind.find(*test_dirs) do |f|
       if File.directory?(f)
         directories += 1
       else
