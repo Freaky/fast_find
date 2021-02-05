@@ -111,6 +111,30 @@ module FastFind
     end
   end
 
+  class UnsafeQueue
+    def initialize
+      @inner = []
+      @closed = false
+    end
+
+    def <<(val)
+      raise QueueClosedError if @closed
+      @inner.unshift val
+    end
+
+    def deq
+      @inner.pop
+    end
+
+    def closed?
+      @closed
+    end
+
+    def close
+      @close = true
+    end
+  end
+
   # A type representing a path with an associated error condition when attempting
   # to either read a directory or stat a file.
   class DirError
@@ -219,10 +243,13 @@ module FastFind
     end
 
     # Return a +FastFind::Walk+ with a configured concurrency limit.
-    # Currently clamped to 1..32.
+    # Currently clamped to 0..32.
     #
     # This limits items posted to the +executor+ on each individual walk,
     # and may be further limited by the executor.
+    #
+    # A concurrency of 1 disables use of the executor and is both recommended
+    # and default for MRI.
     def concurrency(concurrency)
       merge(concurrency: Integer(concurrency).clamp(1, 32))
     end
@@ -249,7 +276,7 @@ module FastFind
       concurrency = opts[:concurrency]
 
       # Entries waiting to be yielded
-      results = SizedQueue.new(64)
+      results = concurrency == 1 ? UnsafeQueue.new : SizedQueue.new(64)
 
       # Yield the paths we were passed
       results << opts[:paths].map do |path|
@@ -275,15 +302,23 @@ module FastFind
             else
               catch(:prune) do
                 yield(entry) if opts[:min_depth] <= entry.depth && opts[:max_depth] >= entry.depth
-                pending << entry if entry.directory? && opts[:max_depth] > entry.depth
+                if entry.directory? && opts[:max_depth] > entry.depth
+                  if concurrency == 1
+                    walking += 1
+                    walk(entry.path, entry.depth + 1, results)
+                  else
+                    pending << entry
+                  end
+                end
               end
             end
           end
         end
 
-        if walking < concurrency && !pending.empty?
+        if concurrency > 1 && walking < concurrency && !pending.empty?
           pending.pop(concurrency - walking).each do |entry|
             walking += 1
+
             executor.post(entry, results) do |entry|
               walk(entry.path, entry.depth + 1, results) unless results.closed?
             end
@@ -304,6 +339,8 @@ module FastFind
     end
 
     private
+
+    FS_ENCODING = Encoding.find("filesystem")
 
     def walk(path, depth, results)
       enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
