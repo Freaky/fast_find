@@ -11,9 +11,20 @@ test_dirs = ARGV
 abort("Usage: #{$PROGRAM_NAME} [dir1 [dir2[ ..]]]") if test_dirs.empty?
 
 Benchmark.bmbm do |b|
-  b.report('FastFind') do
+  b.report('Find') do
     files = directories = 0
-    FastFind.paths(*test_dirs).each do |entry|
+    Find.find(*test_dirs) do |f|
+      if File.directory?(f)
+        directories += 1
+      else
+        files += 1
+      end
+    end
+  end
+
+  b.report('FastFind Sequential') do
+    files = directories = 0
+    FastFind.paths(*test_dirs).concurrency(0).each do |entry|
       if entry.directory?
         directories += 1
       else
@@ -22,10 +33,10 @@ Benchmark.bmbm do |b|
     end
   end
 
-  b.report('Find') do
+  b.report('FastFind 8 Threads') do
     files = directories = 0
-    Find.find(*test_dirs) do |f|
-      if File.directory?(f)
+    FastFind.paths(*test_dirs).concurrency(8).each do |entry|
+      if entry.directory?
         directories += 1
       else
         files += 1

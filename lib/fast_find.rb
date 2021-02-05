@@ -111,30 +111,6 @@ module FastFind
     end
   end
 
-  class UnsafeQueue
-    def initialize
-      @inner = []
-      @closed = false
-    end
-
-    def <<(val)
-      raise QueueClosedError if @closed
-      @inner.unshift val
-    end
-
-    def deq
-      @inner.pop
-    end
-
-    def closed?
-      @closed
-    end
-
-    def close
-      @close = true
-    end
-  end
-
   # A type representing a path with an associated error condition when attempting
   # to either read a directory or stat a file.
   class DirError
@@ -248,10 +224,10 @@ module FastFind
     # This limits items posted to the +executor+ on each individual walk,
     # and may be further limited by the executor.
     #
-    # A concurrency of 1 disables use of the executor and is both recommended
+    # A concurrency of 0 disables use of the executor and is both recommended
     # and default for MRI.
     def concurrency(concurrency)
-      merge(concurrency: Integer(concurrency).clamp(1, 32))
+      merge(concurrency: Integer(concurrency).clamp(0, 32))
     end
 
     # Return a +FastFind::Walk+ which executes its searches on the provided
@@ -273,10 +249,10 @@ module FastFind
       return enum_for(__method__) unless block_given?
 
       executor = opts[:executor] || FastFind.default_executor
-      concurrency = opts[:concurrency]
+      concurrency = opts[:concurrency] + 1
 
       # Entries waiting to be yielded
-      results = concurrency == 1 ? UnsafeQueue.new : SizedQueue.new(64)
+      results = SizedQueue.new(64)
 
       # Yield the paths we were passed
       results << opts[:paths].map do |path|
@@ -292,7 +268,8 @@ module FastFind
         if result == DIR_FINISHED
           walking -= 1
         else
-          result.each do |entry|
+          while (entry = result.pop)
+            next if entry == DIR_FINISHED
             next if opts[:skip_hidden] && entry.basename.start_with?('.')
 
             if entry.error?
@@ -304,8 +281,15 @@ module FastFind
                 yield(entry) if opts[:min_depth] <= entry.depth && opts[:max_depth] >= entry.depth
                 if entry.directory? && opts[:max_depth] > entry.depth
                   if concurrency == 1
+                    walk(entry.path, entry.depth + 1) { |val| result.push(*val) }
+                  elsif walking < concurrency
+                    # Not strictly necessary, but gets us to post work a tiny bit sooner
                     walking += 1
-                    walk(entry.path, entry.depth + 1, results)
+                    executor.post(entry, results) do |entry|
+                      unless results.closed?
+                        walk(entry.path, entry.depth + 1) { |val| results << val }
+                      end
+                    end
                   else
                     pending << entry
                   end
@@ -320,7 +304,9 @@ module FastFind
             walking += 1
 
             executor.post(entry, results) do |entry|
-              walk(entry.path, entry.depth + 1, results) unless results.closed?
+              unless results.closed?
+                walk(entry.path, entry.depth + 1) { |val| results << val }
+              end
             end
           end
         end
@@ -342,21 +328,21 @@ module FastFind
 
     FS_ENCODING = Encoding.find("filesystem")
 
-    def walk(path, depth, results)
+    def walk(path, depth)
       enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
 
       Dir.children(path, encoding: enc).each_slice(8) do |entries|
-        results << entries.map! { |entry| stat(path, entry, depth) }
+        yield entries.map! { |entry| stat(path, entry, depth) }
       end
     rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP, Errno::ENAMETOOLONG => e
       dirname, basename = File.split(path)
-      results << [DirError.new(basename: basename, dirname: dirname, depth: depth, error: e)]
+      yield [DirError.new(basename: basename, dirname: dirname, depth: depth, error: e)]
     rescue ClosedQueueError
     rescue => e
       warn e
       raise
     ensure
-      results << DIR_FINISHED unless results.closed?
+      yield DIR_FINISHED
     end
 
     def stat(dirname, basename, depth)
