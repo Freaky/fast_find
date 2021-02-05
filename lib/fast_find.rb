@@ -50,6 +50,8 @@ module FastFind
     #
     # This object must respond to +#post+, executing the provided block in a way
     # that will not block the current thread.
+    #
+    # Defaults to +Concurrent.global_io_executor+
     attr_accessor :default_executor
 
     %i[paths min_depth max_depth follow_links skip_hidden on_error executor].each do |fn|
@@ -64,12 +66,7 @@ module FastFind
     end
   end
 
-  self.default_executor = case RUBY_ENGINE
-  when 'jruby', 'rbx'
-    Concurrent::FixedThreadPool.new(8, idletime: 60)
-  else
-    Concurrent::FixedThreadPool.new(1, idletime: 60)
-  end
+  self.default_executor = Concurrent.global_io_executor
 
   # A type representing a path which has an associated +File::Stat+ available.
   class DirEntry
@@ -164,6 +161,7 @@ module FastFind
       max_depth: Float::INFINITY,
       skip_hidden: false,
       on_error: :ignore,
+      concurrency: RUBY_ENGINE == 'jruby' ? 8 : 1,
       executor: nil
     }.freeze
 
@@ -220,6 +218,15 @@ module FastFind
       merge(on_error: action)
     end
 
+    # Return a +FastFind::Walk+ with a configured concurrency limit.
+    # Currently clamped to 1..32.
+    #
+    # This limits items posted to the +executor+ on each individual walk,
+    # and may be further limited by the executor.
+    def concurrency(concurrency)
+      merge(concurrency: Integer(concurrency).clamp(1, 32))
+    end
+
     # Return a +FastFind::Walk+ which executes its searches on the provided
     # +Concurrent::Ruby+ or similar executor.
     #
@@ -239,9 +246,10 @@ module FastFind
       return enum_for(__method__) unless block_given?
 
       executor = opts[:executor] || FastFind.default_executor
+      concurrency = opts[:concurrency]
 
       # Entries waiting to be yielded
-      results = SizedQueue.new(32)
+      results = SizedQueue.new(64)
 
       # Yield the paths we were passed
       results << opts[:paths].map do |path|
@@ -249,13 +257,13 @@ module FastFind
         stat(path, name, 0)
       end
       results << DIR_FINISHED
-      pending = 1
+      walking = 0
+      pending = []
 
-      loop do
+      until walking < 0
         result = results.deq
         if result == DIR_FINISHED
-          pending -= 1
-          break if pending.zero?
+          walking -= 1
         else
           result.each do |entry|
             next if opts[:skip_hidden] && entry.basename.start_with?('.')
@@ -267,14 +275,17 @@ module FastFind
             else
               catch(:prune) do
                 yield(entry) if opts[:min_depth] <= entry.depth && opts[:max_depth] >= entry.depth
-
-                if entry.directory? && opts[:max_depth] >= entry.depth + 1
-                  pending += 1
-                  executor.post(entry.path, results) do |path, results_|
-                    walk(path, entry.depth + 1, results_) unless results_.closed?
-                  end
-                end
+                pending << entry if entry.directory? && opts[:max_depth] > entry.depth
               end
+            end
+          end
+        end
+
+        if walking < concurrency && !pending.empty?
+          pending.pop(concurrency - walking).each do |entry|
+            walking += 1
+            executor.post(entry, results) do |entry|
+              walk(entry.path, entry.depth + 1, results) unless results.closed?
             end
           end
         end
@@ -297,7 +308,7 @@ module FastFind
     def walk(path, depth, results)
       enc = path.encoding == Encoding::US_ASCII ? FS_ENCODING : path.encoding
 
-      Dir.children(path, encoding: enc).each_slice(32) do |entries|
+      Dir.children(path, encoding: enc).each_slice(8) do |entries|
         results << entries.map! { |entry| stat(path, entry, depth) }
       end
     rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, Errno::ELOOP, Errno::ENAMETOOLONG => e
